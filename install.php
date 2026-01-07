@@ -1,6 +1,6 @@
 <?php
 
-define('VERSION', '1.0.x');
+define('VERSION', '1.1.0');
 define('RUNDEPLOY', false);
 
 session_start();
