@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### 🐞 Bugfix
+
+- Support windows environment
+
+---
+
 ## [v1.0.0]
 
 **First release**

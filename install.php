@@ -1,6 +1,6 @@
 <?php
 
-define('VERSION', '1.0.0');
+define('VERSION', '1.0.x');
 define('RUNDEPLOY', false);
 
 session_start();
@@ -10,6 +10,8 @@ if (str_ends_with(dirname(__FILE__), 'public')) {
     chdir('..');
     $publicdir = true;
 }
+
+$is_windows = str_starts_with(PHP_OS_FAMILY, 'Windows');
 
 $error = null;
 
@@ -52,6 +54,49 @@ function exec_or_step($cmd, $step, $message = null)
     exec($cmd . ' 2>&1', $output, $retval);
     if ($retval != 0)
         step($step, array_merge($message, $output));
+}
+
+if (!function_exists('get_command_version')) {
+    function get_command_version($command, $versionFlag = '--version')
+    {
+        exec("$command $versionFlag 2>&1", $output, $returnCode);
+        if ($returnCode === 0 && !empty($output)) {
+            foreach ($output as $o) {
+                if (preg_match('/\d+(\.\d+)+(-?[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+)?/', $o, $matches)) {
+                    return strtolower($matches[0]);
+                }
+            }
+        }
+        return false;
+    }
+}
+
+if (!function_exists('get_php_executable')) {
+    function get_php_executable()
+    {
+        $tryVersions = [
+            'php' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
+            'php' . PHP_MAJOR_VERSION,
+            'php'
+        ];
+
+        foreach ($tryVersions as $phpExe) {
+            if (PHP_OS_FAMILY === 'Windows') {
+                exec("where $phpExe 2>&1", $output, $returnCode);
+            } else {
+                exec("command -v $phpExe 2>&1", $output, $returnCode);
+            }
+            if ($returnCode === 0 && !empty($output)) {
+                foreach ($output as $phpPath) {
+                    $phpVer = get_command_version(escapeshellarg($phpPath));
+                    if ($phpVer == PHP_VERSION) {
+                        return escapeshellarg($phpPath);
+                    }
+                }
+            }
+        }
+        return 'php'; // Fallback
+    }
 }
 
 switch ($_POST['action'] ?? '') {
@@ -114,10 +159,14 @@ switch ($_POST['action'] ?? '') {
             $env = $_POST['env'];
             $env = preg_replace('/APP_KEY=.*/', 'APP_KEY=' . $_SESSION['APP_KEY'], $env);
             file_put_contents('./.env', $env);
-            exec_or_step('HOME=' . $home . ' composer install', 'env');
+            if ($is_windows) {
+                exec_or_step('set HOME=' . $home . ' && composer install', 'env');
+            } else {
+                exec_or_step('HOME=' . $home . ' composer install', 'env');
+            }
             exec_or_step('npm install', 'env');
             if (!str_starts_with($_SESSION['APP_KEY'], 'base64')) {
-                exec_or_step('./artisan key:generate', 'env');
+                exec_or_step(get_php_executable() . ' artisan key:generate', 'env');
             }
             step('webhook');
         } else {
@@ -125,11 +174,16 @@ switch ($_POST['action'] ?? '') {
         }
         break;
     case 'install':
+        $phpExe = get_php_executable();
         set_time_limit(600);
-        exec_or_step('./artisan storage:link', 'webhook');
-        exec_or_step('./artisan migrate --force', 'webhook');
-        exec_or_step('./artisan optimize', 'webhook');
-        exec_or_step('PATH=$PATH:node_modules/.bin npm run build', 'webhook');
+        exec_or_step($phpExe . ' artisan storage:link', 'webhook');
+        exec_or_step($phpExe . ' artisan migrate --force', 'webhook');
+        exec_or_step($phpExe . ' artisan optimize', 'webhook');
+        if ($is_windows) {
+            exec_or_step('set PATH=%PATH%;node_modules/.bin && npm run build', 'webhook');
+        } else {
+            exec_or_step('PATH=$PATH:node_modules/.bin npm run build', 'webhook');
+        }
         step('done');
         break;
     case 'deleteinstall':
@@ -477,6 +531,48 @@ function deployfile($token)
         return true;
     }
 
+    if (!function_exists('get_command_version')) {
+        function get_command_version($command, $versionFlag = '--version')
+        {
+            exec("$command $versionFlag 2>&1", $output, $returnCode);
+            if ($returnCode === 0 && !empty($output)) {
+                foreach ($output as $o) {
+                    if (preg_match('/\d+(\.\d+)+(-?[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+)?/', $o, $matches)) {
+                        return strtolower($matches[0]);
+                    }
+                }
+            }
+            return false;
+        }
+    }
+    if(!function_exists('get_php_executable')) {
+        function get_php_executable()
+        {
+            $tryVersions = [
+                'php' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
+                'php' . PHP_MAJOR_VERSION,
+                'php'
+            ];
+
+            foreach ($tryVersions as $phpExe) {
+                if (PHP_OS_FAMILY === 'Windows') {
+                    exec("where $phpExe 2>&1", $output, $returnCode);
+                } else {
+                    exec("command -v $phpExe 2>&1", $output, $returnCode);
+                }
+                if ($returnCode === 0 && !empty($output)) {
+                    foreach ($output as $phpPath) {
+                        $phpVer = get_command_version(escapeshellarg($phpPath));
+                        if ($phpVer == PHP_VERSION) {
+                            return escapeshellarg($phpPath);
+                        }
+                    }
+                }
+            }
+            return 'php'; // Fallback
+        }
+    }
+
     function deploy()
     {
         if (str_ends_with(dirname(__FILE__), 'public')) {
@@ -488,17 +584,26 @@ function deployfile($token)
             $home = posix_getpwuid(posix_getuid())['dir'];
 
         set_time_limit(600);
+        $phpExe = get_php_executable();
         $ret = [];
-        $ret = array_merge($ret, run('./artisan down'));
-        $ret = array_merge($ret, run('./artisan optimize:clear'));
+        $ret = array_merge($ret, run($phpExe . ' artisan down'));
+        $ret = array_merge($ret, run($phpExe . ' artisan optimize:clear'));
         $ret = array_merge($ret, run('git fetch'));
         $ret = array_merge($ret, run('git pull'));
-        $ret = array_merge($ret, run('HOME=' . $home . ' composer install'));
+        if (PHP_OS_FAMILY === 'Windows') {
+            $ret = array_merge($ret, run('set HOME=' . $home . ' && composer install'));
+        } else {
+            $ret = array_merge($ret, run('HOME=' . $home . ' composer install'));
+        }
         $ret = array_merge($ret, run('npm install'));
-        $ret = array_merge($ret, run('./artisan migrate --force'));
-        $ret = array_merge($ret, run('PATH=$PATH:node_modules/.bin npm run build'));
-        $ret = array_merge($ret, run('./artisan optimize'));
-        $ret = array_merge($ret, run('./artisan up'));
+        $ret = array_merge($ret, run($phpExe . ' artisan migrate --force'));
+        if(PHP_OS_FAMILY === 'Windows') {
+            $ret = array_merge($ret, run('set PATH=%PATH%;node_modules/.bin && npm run build'));
+        } else {
+            $ret = array_merge($ret, run('PATH=$PATH:node_modules/.bin npm run build'));
+        }
+        $ret = array_merge($ret, run($phpExe . ' artisan optimize'));
+        $ret = array_merge($ret, run($phpExe . ' artisan up'));
         return $ret;
     }
 
