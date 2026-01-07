@@ -4,6 +4,7 @@
 
 ### 🐞 Bugfix
 
+- Layout issues with buttons
 - Support windows environment
 
 ---

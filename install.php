@@ -246,11 +246,11 @@ switch ($step) {
         $deployfile = $publicdir ? 'public/deploy.php' : 'deploy.php';
         if (is_file($deployfile)) {
             include_once($deployfile);
-            $token = DEPLOYSECRET;
+            $token = defined('DEPLOYSECRET') ? constant('DEPLOYSECRET') : null;
         }
         file_put_contents($deployfile, deployfile($token));
         include_once($deployfile);
-        $token = DEPLOYSECRET;
+        $token = defined('DEPLOYSECRET') ? constant('DEPLOYSECRET') : null;
         break;
 }
 
@@ -340,11 +340,11 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                 </div>
                 <div class="flex gap-2">
                     <a href="<?= steplink('start') ?>"
-                        class="w-32 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
+                        class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
                         <?= $left ?> Back
                     </a>
                     <button type="submit"
-                        class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
+                        class="w-3/4 bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
                         Create deploy key <?= $right ?>
                     </button>
                 </div>
@@ -367,11 +367,11 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                 </div>
                 <div class="flex gap-2">
                     <a href="<?= steplink('start') ?>"
-                        class="w-32 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
+                        class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
                         <?= $left ?> Back
                     </a>
                     <button type="submit"
-                        class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
+                        class="w-3/4 bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
                         Checkout <?= $right ?>
                     </button>
                 </div>
@@ -396,11 +396,11 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                 </div>
                 <div class="flex gap-2">
                     <a href="<?= steplink('home') ?>"
-                        class="w-32 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
+                        class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
                         <?= $left ?> Back
                     </a>
                     <button type="submit"
-                        class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
+                        class="w-3/4 bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
                         Checkout <?= $right ?>
                     </button>
                 </div>
@@ -418,11 +418,11 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                 </div>
                 <div class="flex gap-2">
                     <a href="<?= steplink(str_starts_with($_SESSION['URL'], 'git@github.com:') ? 'giturl_private' : 'giturl_public') ?>"
-                        class="w-32 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
+                        class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
                         <?= $left ?> Back
                     </a>
                     <button type="submit"
-                        class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
+                        class="w-3/4 bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
                         Save .env file and install dependencies<?= $right ?>
                     </button>
                 </div>
@@ -445,11 +445,11 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                 <input type="hidden" name="action" value="install" />
                 <div class="flex gap-2">
                     <a href="<?= steplink('env') ?>"
-                        class="w-32 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
+                        class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
                         <?= $left ?> Back
                     </a>
                     <button type="submit"
-                        class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
+                        class="w-3/4 bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
                         Finish installation <?= $right ?>
                     </button>
                 </div>
@@ -473,11 +473,11 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                 <input type="hidden" name="action" value="deleteinstall" />
                 <div class="flex gap-2">
                     <a href="<?= steplink('start') ?>"
-                        class="w-32 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
+                        class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
                         <?= $left ?> Back
                     </a>
                     <button type="submit"
-                        class="w-full bg-red-600 text-white font-semibold py-2 px-4 rounded hover:bg-red-800 transition duration-200">
+                        class="w-3/4 bg-red-600 text-white font-semibold py-2 px-4 rounded hover:bg-red-800 transition duration-200">
                         Delete install.php
                     </button>
                 </div>
@@ -489,11 +489,11 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                 <input type="hidden" name="action" value="deleteinstall" />
                 <div class="flex gap-2">
                     <a href="<?= steplink('webhook') ?>"
-                        class="w-32 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
+                        class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
                         <?= $left ?> Back
                     </a>
                     <button type="submit"
-                        class="w-full bg-red-600 text-white font-semibold py-2 px-4 rounded hover:bg-red-800 transition duration-200">
+                        class="w-3/4 bg-red-600 text-white font-semibold py-2 px-4 rounded hover:bg-red-800 transition duration-200">
                         Delete install.php
                     </button>
                 </div>
