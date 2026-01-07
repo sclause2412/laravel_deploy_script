@@ -13,6 +13,77 @@ if (str_ends_with(dirname(__FILE__), 'public')) {
 
 $is_windows = str_starts_with(PHP_OS_FAMILY, 'Windows');
 
+function status_check()
+{
+    $current_dir = realpath('.');
+    $current_dir_check = is_writable($current_dir);
+    $public_dir = realpath('./public');
+    $public_dir_check = $public_dir !== false ? is_writable($public_dir) : false;
+    $composer_version = get_command_version('composer');
+    $git_version = get_command_version('git');
+    $npm_version = get_command_version('npm');
+    $ssh_version = get_command_version('ssh', '-V');
+    $status_check = [
+        'os' => [
+            'check' => 'Operation System',
+            'require' => 'Linux / Windows / Darwin',
+            'current' => PHP_OS_FAMILY,
+            'status' => in_array(PHP_OS_FAMILY, ['Linux', 'Windows', 'Darwin']),
+            'optional' => false
+        ],
+        'php' => [
+            'check' => 'PHP Version' . PHP_EOL . trim(get_php_executable(), "'\""),
+            'require' => '8.x.x or higher',
+            'current' => PHP_VERSION,
+            'status' => PHP_MAJOR_VERSION >= 8,
+            'optional' => false
+        ],
+        'current_directory' => [
+            'check' => 'Current directory' . PHP_EOL . $current_dir,
+            'require' => 'writable',
+            'current' => $current_dir_check ? 'Yes' : 'No',
+            'status' => $current_dir_check,
+            'optional' => false
+        ],
+        'public_directory' => [
+            'check' => 'Public directory' . PHP_EOL . ($public_dir ?: 'N/A'),
+            'require' => $public_dir ? 'writable' : 'N/A',
+            'current' => $public_dir_check ? 'Yes' : 'No',
+            'status' => $public_dir_check,
+            'optional' => $public_dir ? false : true,
+        ],
+        'composer' => [
+            'check' => 'Composer',
+            'require' => '2.x.x or higher',
+            'current' => $composer_version ?: 'Not found',
+            'status' => version_compare($composer_version, '2', '>='),
+            'optional' => false
+        ],
+        'git' => [
+            'check' => 'GIT',
+            'require' => '2.x.x or higher',
+            'current' => $git_version ?: 'Not found',
+            'status' => version_compare($git_version, '2', '>='),
+            'optional' => false
+        ],
+        'npm' => [
+            'check' => 'npm (Node.js)',
+            'require' => '10.x.x or higher',
+            'current' => $npm_version ?: 'Not found',
+            'status' => version_compare($npm_version, '10', '>='),
+            'optional' => false
+        ],
+        'ssh' => [
+            'check' => 'SSH',
+            'require' => '(optional)',
+            'current' => $ssh_version ?: 'Not found',
+            'status' => $ssh_version !== false,
+            'optional' => true
+        ],
+    ];
+    return $status_check;
+}
+
 $error = null;
 
 $step = $_GET['step'] ?? 'start';
@@ -100,6 +171,9 @@ if (!function_exists('get_php_executable')) {
 }
 
 switch ($_POST['action'] ?? '') {
+    case 'selectrepotype':
+        step('selectrepo');
+        break;
     case 'setrepotype':
         $type = $_POST['type'] ?? '';
         $_SESSION['REPOTYPE'] = $type;
@@ -108,7 +182,11 @@ switch ($_POST['action'] ?? '') {
                 step('giturl_public');
                 break;
             case 'private':
-                step('home');
+                $status_check = status_check();
+                if ($status_check['ssh']['status'])
+                    step('home');
+                else
+                    step('giturl_private', 'SSH not available, private repo might not work!');
                 break;
         }
         step('start', 'Please provide repository type');
@@ -194,7 +272,15 @@ switch ($_POST['action'] ?? '') {
 
 switch ($step) {
     case 'start':
+        $status_check = status_check();
+        $status_total = array_reduce($status_check, function ($carry, $item) {
+            return $carry && ($item['status'] || $item['optional']);
+        }, true);
+        break;
+    case 'selectrepo':
         $type = 'public';
+        $status_check = status_check();
+        $private_warning = !$status_check['ssh']['status'];
         $output = '';
         exec('git remote get-url origin', $output, $retval);
         if ($retval == 0) {
@@ -215,9 +301,11 @@ switch ($step) {
             $key = file_get_contents($home . '/.ssh/deploy-git.pub');
             $_SESSION['SSHKEY'] = $key;
         } else {
-            $error = 'Key not found!';
+            $error = $error ?: 'Key not found!';
             $key = 'Key not found!';
         }
+        $status_check = status_check();
+        $nohome = !$status_check['ssh']['status'];
         break;
     case 'env':
         if (!is_file('.env')) {
@@ -290,6 +378,14 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
         body {
             font-family: 'Inter', sans-serif;
         }
+
+        .bordered-table th,
+        .bordered-table td {
+            border: 1px solid #d1d5db;
+            /* Tailwind's gray-300 */
+            padding: 0.5rem 1rem;
+            /* Tailwind's px-4 py-2 */
+        }
     </style>
 </head>
 
@@ -304,6 +400,57 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
             <div class="text-gray-800 mb-4">This tool tries to install an automatic deployment solution for your GitHub
                 repository with a Laravel app. Please follow the steps.</div>
             <form action="" method="POST" class="space-y-4">
+                <input type="hidden" name="action" value="selectrepotype" />
+                <div>
+                    <table class="bordered-table w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Check</th>
+                                <th class="text-left">Required</th>
+                                <th class="text-left">Current</th>
+                                <th class="text-left">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($status_check as $c): ?>
+                                <tr>
+                                    <td><?= nl2br(htmlspecialchars($c['check'])) ?></td>
+                                    <td><?= htmlspecialchars($c['require']) ?></td>
+                                    <td><?= htmlspecialchars($c['current']) ?></td>
+                                    <td><?= $c['status'] ? '<span class="text-green-600 font-bold">OK</span>' : ($c['optional'] ? '<span class="text-yellow-600 font-bold">NOT AVAILABLE</span>' : '<span class="text-red-600 font-bold">NOT OK</span>') ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php if ($status_total): ?>
+                    <div class="flex gap-2">
+                        <a href="<?= steplink('webhook_only') ?>"
+                            class="w-1/4 bg-teal-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-teal-800 transition duration-200">
+                            Just create deploy file
+                        </a>
+                        <button type="submit"
+                            class="w-3/4 bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
+                            Continue <?= $right ?>
+                        </button>
+                    </div>
+                <?php else: ?>
+                    <div class="text-red-600 font-bold"> Some requirements are not met. Please check the above table.</div>
+                    <div class="flex gap-2">
+                        <div class="w-1/4 bg-gray-400 text-white text-center font-semibold py-2 px-4 rounded">
+                            Just create deploy file
+                        </div>
+                        <div class="w-3/4 bg-gray-400 text-white text-center font-semibold py-2 px-4 rounded">
+                            Continue <?= $right ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </form>
+        <?php elseif ($step === 'selectrepo'): ?>
+            <div class="text-gray-800 mb-4">This tool tries to install an automatic deployment solution for your GitHub
+                repository with a Laravel app. Please follow the steps.</div>
+            <form action="" method="POST" class="space-y-4">
                 <input type="hidden" name="action" value="setrepotype" />
                 <div>
                     <label for="type" class="block text-sm font-medium text-gray-700">What kind of GitHub repository to
@@ -313,13 +460,16 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                         <option value="public" <?= $type != 'private' ? 'selected' : '' ?>>Public (https://github.com/...)
                         </option>
                         <option value="private" <?= $type == 'private' ? 'selected' : '' ?>>Private (git@github.com:...)
+                            <?php if ($private_warning): ?>
+                                - Warning: SSH not available, private repo might not work!
+                            <?php endif; ?>
                         </option>
                     </select>
                 </div>
                 <div class="flex gap-2">
-                    <a href="<?= steplink('webhook_only') ?>"
-                        class="w-1/4 bg-teal-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-teal-800 transition duration-200">
-                        Just create deploy file
+                    <a href="<?= steplink('start') ?>"
+                        class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
+                        <?= $left ?> Back
                     </a>
                     <button type="submit"
                         class="w-3/4 bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-800 transition duration-200">
@@ -339,7 +489,7 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                         value="<?= $home ?>" />
                 </div>
                 <div class="flex gap-2">
-                    <a href="<?= steplink('start') ?>"
+                    <a href="<?= steplink('selectrepo') ?>"
                         class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
                         <?= $left ?> Back
                     </a>
@@ -366,7 +516,7 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                         class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring focus:ring-blue-200" />
                 </div>
                 <div class="flex gap-2">
-                    <a href="<?= steplink('start') ?>"
+                    <a href="<?= steplink('selectrepo') ?>"
                         class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
                         <?= $left ?> Back
                     </a>
@@ -395,7 +545,7 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                         class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring focus:ring-blue-200" />
                 </div>
                 <div class="flex gap-2">
-                    <a href="<?= steplink('home') ?>"
+                    <a href="<?= steplink($nohome ? 'selectrepo' : 'home') ?>"
                         class="w-1/4 bg-gray-600 text-white text-center font-semibold py-2 px-4 rounded hover:bg-gray-800 transition duration-200">
                         <?= $left ?> Back
                     </a>

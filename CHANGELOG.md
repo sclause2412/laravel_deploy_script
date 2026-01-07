@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### ✨ New
+
+- Check prerequisites
+
 ### 🐞 Bugfix
 
 - Layout issues with buttons
