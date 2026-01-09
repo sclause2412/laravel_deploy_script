@@ -1,6 +1,6 @@
 <?php
 
-define('VERSION', '2.0.0');
+define('VERSION', '2.0.1');
 define('RUNDEPLOY', false);
 
 session_start();
@@ -185,9 +185,10 @@ $error = null;
 
 $step = $_GET['step'] ?? 'start';
 $home = $_SESSION['HOME'] ?? getenv('HOME') ?: getenv('HOMEDRIVE') . getenv('HOMEPATH');
-if ($home == '')
-    $home = posix_getpwuid(posix_getuid())['dir'];
-
+if ($home == '') {
+    if (function_exists('posix_getpwuid') && function_exists('posix_getuid'))
+        $home = posix_getpwuid(posix_getuid())['dir'];
+}
 
 
 $error = $_SESSION['ERROR'] ?? '';

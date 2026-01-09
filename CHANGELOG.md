@@ -1,5 +1,13 @@
 # Changelog
 
+## [v2.0.1]
+
+### 🐞 Bugfix
+
+- Fix issue if posix functions are not installed
+
+---
+
 ## [v2.0.0]
 
 ### ✨ New
