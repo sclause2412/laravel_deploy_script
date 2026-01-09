@@ -1,24 +1,81 @@
 <?php
 
-define('VERSION', '1.1.0');
+define('VERSION', '2.0.0');
 define('RUNDEPLOY', false);
 
 session_start();
 
-$publicdir = false;
-if (str_ends_with(dirname(__FILE__), 'public')) {
-    chdir('..');
-    $publicdir = true;
+function get_directories()
+{
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+    $host = $_SERVER['HTTP_HOST'];
+    $requestUri = $_SERVER['REQUEST_URI'];
+    $installUrl = preg_replace('/\?.*/', '', $requestUri);
+    $fullInstallUrl = $protocol . $host . $installUrl;
+    if (str_ends_with($installUrl, basename(__FILE__))) {
+        $webrootUrl = substr($installUrl, 0, -strlen(basename(__FILE__)));
+        if (!str_starts_with($webrootUrl, '/')) {
+            $webrootUrl = '/' . $webrootUrl;
+        }
+    } else {
+        $webrootUrl = '/';
+    }
+    $fullWebrootUrl = $protocol . $host . $webrootUrl;
+
+    $docroot = realpath($_SERVER['DOCUMENT_ROOT']) ?? '';
+    $current_dir = realpath(dirname(__FILE__));
+    $docroot_has_public_dir = str_ends_with($docroot, 'public');
+    $is_in_docroot = $current_dir == $docroot;
+    $is_in_public = str_ends_with($current_dir, 'public');
+
+    $htaccess_needed = false;
+    if ($is_in_public) {
+        $base_dir = realpath($current_dir . '/..');
+        if (!is_writable($base_dir)) {
+            $base_dir = $current_dir;
+            $is_in_public = false;
+            $htaccess_needed = true;
+        }
+    } else {
+        $base_dir = $current_dir;
+        $htaccess_needed = true;
+    }
+
+    return [
+        'docroot' => $docroot,
+        'current_dir' => $current_dir,
+        'base_dir' => $base_dir,
+        'webroot' => $webrootUrl,
+        'full_webroot' => $fullWebrootUrl,
+        'url' => $installUrl,
+        'full_url' => $fullInstallUrl,
+        'docroot_has_public_dir' => $docroot_has_public_dir,
+        'is_in_docroot' => $is_in_docroot,
+        'is_in_public' => $is_in_public,
+        'htaccess_needed' => $htaccess_needed,
+        'webroot_modification_needed' => $webrootUrl == '/' ? false : true,
+
+    ];
 }
 
 $is_windows = str_starts_with(PHP_OS_FAMILY, 'Windows');
+$dirs = get_directories();
+$base_dir = $dirs['base_dir'];
+$public_dir = $dirs['current_dir'];
 
 function status_check()
 {
-    $current_dir = realpath('.');
+    $dirs = get_directories();
+    $docroot = $dirs['docroot'];
+    $docroot_has_public_dir = $dirs['docroot_has_public_dir'];
+    $current_dir = $dirs['current_dir'];
     $current_dir_check = is_writable($current_dir);
-    $public_dir = realpath('./public');
-    $public_dir_check = $public_dir !== false ? is_writable($public_dir) : false;
+    $is_in_docroot = $current_dir == $docroot;
+    $base_dir = $dirs['base_dir'];
+    $base_dir_check = is_writable($base_dir);
+    $webrootUrl = $dirs['webroot'];
+    $php_exe = get_php_executable();
+    $php_version = get_command_version($php_exe);
     $composer_version = get_command_version('composer');
     $git_version = get_command_version('git');
     $npm_version = get_command_version('npm');
@@ -29,56 +86,96 @@ function status_check()
             'require' => 'Linux / Windows / Darwin',
             'current' => PHP_OS_FAMILY,
             'status' => in_array(PHP_OS_FAMILY, ['Linux', 'Windows', 'Darwin']),
-            'optional' => false
+            'optional' => false,
+            'value' => PHP_OS_FAMILY,
         ],
         'php' => [
-            'check' => 'PHP Version' . PHP_EOL . trim(get_php_executable(), "'\""),
+            'check' => 'PHP Version',
             'require' => '8.x.x or higher',
             'current' => PHP_VERSION,
             'status' => PHP_MAJOR_VERSION >= 8,
-            'optional' => false
+            'optional' => false,
+            'value' => PHP_VERSION
         ],
-        'current_directory' => [
-            'check' => 'Current directory' . PHP_EOL . $current_dir,
+        'is_in_docroot' => [
+            'check' => 'Document root' . PHP_EOL . $docroot,
+            'require' => 'script located in document root',
+            'current' => $is_in_docroot ? 'Yes' : 'No',
+            'status' => $is_in_docroot ? true : 'MODIFICATION NEEDED',
+            'optional' => true,
+            'value' => $is_in_docroot,
+        ],
+        'base_directory' => [
+            'check' => 'Base directory' . PHP_EOL . ($base_dir ?: 'N/A'),
+            'require' => 'writable',
+            'current' => $base_dir_check ? 'Yes' : 'No',
+            'status' => $base_dir_check ? true : 'MODIFICATION NEEDED',
+            'optional' => true,
+            'value' => $base_dir,
+        ],
+        'public_directory' => [
+            'check' => 'Public directory' . PHP_EOL . $current_dir,
             'require' => 'writable',
             'current' => $current_dir_check ? 'Yes' : 'No',
             'status' => $current_dir_check,
-            'optional' => false
+            'optional' => false,
+            'value' => $current_dir,
         ],
-        'public_directory' => [
-            'check' => 'Public directory' . PHP_EOL . ($public_dir ?: 'N/A'),
-            'require' => $public_dir ? 'writable' : 'N/A',
-            'current' => $public_dir_check ? 'Yes' : 'No',
-            'status' => $public_dir_check,
-            'optional' => $public_dir ? false : true,
+        'webroot' => [
+            'check' => 'Webroot',
+            'require' => '/',
+            'current' => $webrootUrl,
+            'status' => $dirs['webroot_modification_needed'] ? 'MODIFICATION NEEDED' : true,
+            'optional' => true,
+            'value' => $webrootUrl,
+        ],
+        'htaccess_needed' => [
+            'check' => 'Workaround for Laravel public directory',
+            'require' => $dirs['htaccess_needed'] ? 'needed' : 'not needed',
+            'current' => $dirs['htaccess_needed'] ? 'will be generated' : 'not needed',
+            'status' => $dirs['htaccess_needed'] ? 'MODIFICATION NEEDED' : true,
+            'optional' => true,
+            'value' => $dirs['htaccess_needed'],
+        ],
+        'phpexe' => [
+            'check' => 'PHP Executable' . PHP_EOL . trim($php_exe, "'\""),
+            'require' => PHP_VERSION,
+            'current' => $php_version ?: 'Not found',
+            'status' => version_compare($php_version, PHP_VERSION, '='),
+            'optional' => false,
+            'value' => trim($php_exe, "'\""),
         ],
         'composer' => [
             'check' => 'Composer',
             'require' => '2.x.x or higher',
             'current' => $composer_version ?: 'Not found',
             'status' => version_compare($composer_version, '2', '>='),
-            'optional' => false
+            'optional' => false,
+            'value' => $composer_version,
         ],
         'git' => [
             'check' => 'GIT',
             'require' => '2.x.x or higher',
             'current' => $git_version ?: 'Not found',
             'status' => version_compare($git_version, '2', '>='),
-            'optional' => false
+            'optional' => false,
+            'value' => $git_version,
         ],
         'npm' => [
             'check' => 'npm (Node.js)',
             'require' => '10.x.x or higher',
             'current' => $npm_version ?: 'Not found',
             'status' => version_compare($npm_version, '10', '>='),
-            'optional' => false
+            'optional' => false,
+            'value' => $npm_version,
         ],
         'ssh' => [
             'check' => 'SSH',
             'require' => '(optional)',
             'current' => $ssh_version ?: 'Not found',
             'status' => $ssh_version !== false,
-            'optional' => true
+            'optional' => true,
+            'value' => $ssh_version,
         ],
     ];
     return $status_check;
@@ -92,28 +189,24 @@ if ($home == '')
     $home = posix_getpwuid(posix_getuid())['dir'];
 
 
-$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-$host = $_SERVER['HTTP_HOST'];
-$requestUri = $_SERVER['REQUEST_URI'];
-$fullUrl = preg_replace('/install\.php.*/', '', $protocol . $host . $requestUri);
 
 $error = $_SESSION['ERROR'] ?? '';
 $_SESSION['ERROR'] = '';
 
 function step($s, $error = null)
 {
-    global $fullUrl;
+    global $dirs;
     if (!is_null($error)) {
         $_SESSION['ERROR'] = is_array($error) ? implode("\n", $error) : $error;
     }
-    header('Location: ' . $fullUrl . 'install.php?step=' . $s);
+    header('Location: ' . $dirs['full_url'] . '?step=' . $s);
     exit();
 }
 
 function steplink($s)
 {
-    global $fullUrl;
-    return $fullUrl . 'install.php?step=' . $s;
+    global $dirs;
+    return $dirs['full_url'] . '?step=' . $s;
 }
 
 function exec_or_step($cmd, $step, $message = null)
@@ -220,6 +313,7 @@ switch ($_POST['action'] ?? '') {
         if (isset($_POST['url'])) {
             $_SESSION['URL'] = $_POST['url'];
             $_SESSION['BRANCH'] = $_POST['branch'];
+            chdir($base_dir);
             exec_or_step('git init', $step);
             exec_or_step('git remote add origin ' . $_POST['url'] . ' || git remote set-url origin ' . $_POST['url'], $step);
             exec_or_step('git fetch', $step);
@@ -234,8 +328,9 @@ switch ($_POST['action'] ?? '') {
     case 'setenv':
         if (isset($_POST['env'])) {
             set_time_limit(600);
+            chdir($base_dir);
             $env = $_POST['env'];
-            $env = preg_replace('/APP_KEY=.*/', 'APP_KEY=' . $_SESSION['APP_KEY'], $env);
+            $env = change_or_add('/APP_KEY=.*/', 'APP_KEY=' . $_SESSION['APP_KEY'], $env);
             file_put_contents('./.env', $env);
             if ($is_windows) {
                 exec_or_step('set HOME=' . $home . ' && composer install', 'env');
@@ -252,8 +347,25 @@ switch ($_POST['action'] ?? '') {
         }
         break;
     case 'install':
-        $phpExe = get_php_executable();
         set_time_limit(600);
+        if ($dirs['htaccess_needed']) {
+            chdir($public_dir);
+            file_put_contents('.htaccess', htaccess_file($dirs['webroot']));
+        }
+        chdir($base_dir);
+        $phpExe = get_php_executable();
+
+        $routerfile = $base_dir . '/vendor/laravel/framework/src/Illuminate/Routing/Router.php';
+        if (is_file($routerfile)) {
+            $routercontent = file_get_contents($routerfile);
+            $search = 'protected $groupStack = [];';
+            $replace = "protected \$groupStack = [['prefix'=>'" . trim($dirs['webroot'], '/') . "']];";
+            if (strpos($routercontent, $search) !== false) {
+                $routercontent = str_replace($search, $replace, $routercontent);
+                file_put_contents($routerfile, $routercontent);
+            }
+        }
+
         exec_or_step($phpExe . ' artisan storage:link', 'webhook');
         exec_or_step($phpExe . ' artisan migrate --force', 'webhook');
         exec_or_step($phpExe . ' artisan optimize', 'webhook');
@@ -266,7 +378,7 @@ switch ($_POST['action'] ?? '') {
         break;
     case 'deleteinstall':
         unlink(__FILE__);
-        header('Location: ' . $fullUrl);
+        header('Location: ' . $dirs['full_webroot']);
         exit();
 }
 
@@ -274,7 +386,7 @@ switch ($step) {
     case 'start':
         $status_check = status_check();
         $status_total = array_reduce($status_check, function ($carry, $item) {
-            return $carry && ($item['status'] || $item['optional']);
+            return $carry && ($item['status'] === true || $item['optional']);
         }, true);
         break;
     case 'selectrepo':
@@ -282,6 +394,7 @@ switch ($step) {
         $status_check = status_check();
         $private_warning = !$status_check['ssh']['status'];
         $output = '';
+        chdir($base_dir);
         exec('git remote get-url origin', $output, $retval);
         if ($retval == 0) {
             $output = is_array($output) ? $output[0] : $output;
@@ -308,6 +421,7 @@ switch ($step) {
         $nohome = !$status_check['ssh']['status'];
         break;
     case 'env':
+        chdir($base_dir);
         if (!is_file('.env')) {
             $env = '';
             if (is_file('.env.production')) {
@@ -315,23 +429,25 @@ switch ($step) {
             } elseif (is_file('.env.example')) {
                 $env = file_get_contents('.env.example');
             }
-            $env = preg_replace('/APP_DEBUG=.*/', 'APP_DEBUG=false', $env);
-            $env = preg_replace('/APP_URL=.*/', 'APP_URL=' . $fullUrl, $env);
-            $env = preg_replace('/APP_ENV=.*/', 'APP_ENV=production', $env);
-            $env = preg_replace('/LOG_LEVEL=.*/', 'LOG_LEVEL=critical', $env);
+            $env = change_or_add('/APP_DEBUG=.*/', 'APP_DEBUG=false', $env);
+            $env = change_or_add('/APP_URL=.*/', 'APP_URL=' . $dirs['full_webroot'], $env);
+            $env = change_or_add('/ASSET_URL=.*/', 'ASSET_URL=' . $dirs['full_webroot'], $env);
+            $env = change_or_add('/APP_ENV=.*/', 'APP_ENV=production', $env);
+            $env = change_or_add('/LOG_LEVEL=.*/', 'LOG_LEVEL=critical', $env);
         } else {
             $env = file_get_contents('.env');
         }
         preg_match('/APP_KEY=(.*)/', $env, $matches);
         $_SESSION['APP_KEY'] = $matches[1];
 
-        $env = preg_replace('/APP_KEY=.*/', 'APP_KEY=*****', $env);
+        $env = change_or_add('/APP_KEY=.*/', 'APP_KEY=*****', $env);
         break;
 
     case 'webhook':
     case 'webhook_only':
         $token = null;
-        $deployfile = $publicdir ? 'public/deploy.php' : 'deploy.php';
+        chdir($public_dir);
+        $deployfile = 'deploy.php';
         if (is_file($deployfile)) {
             include_once($deployfile);
             $token = defined('DEPLOYSECRET') ? constant('DEPLOYSECRET') : null;
@@ -340,6 +456,15 @@ switch ($step) {
         include_once($deployfile);
         $token = defined('DEPLOYSECRET') ? constant('DEPLOYSECRET') : null;
         break;
+}
+
+function change_or_add($pattern, $replacement, $subject)
+{
+    if (preg_match($pattern, $subject)) {
+        return preg_replace($pattern, $replacement, $subject);
+    } else {
+        return $subject . PHP_EOL . $replacement;
+    }
 }
 
 
@@ -417,7 +542,11 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
                                     <td><?= nl2br(htmlspecialchars($c['check'])) ?></td>
                                     <td><?= htmlspecialchars($c['require']) ?></td>
                                     <td><?= htmlspecialchars($c['current']) ?></td>
-                                    <td><?= $c['status'] ? '<span class="text-green-600 font-bold">OK</span>' : ($c['optional'] ? '<span class="text-yellow-600 font-bold">NOT AVAILABLE</span>' : '<span class="text-red-600 font-bold">NOT OK</span>') ?>
+                                    <td><?= $c['status'] === true ?
+                                        '<span class="text-green-600 font-bold">OK</span>' :
+                                        ($c['status'] === false ?
+                                            ($c['optional'] ? '<span class="text-yellow-600 font-bold">NOT AVAILABLE</span>' : '<span class="text-red-600 font-bold">NOT OK</span>') :
+                                            '<span class="text-yellow-600 font-bold">' . $c['status'] . '</span>') ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -581,7 +710,7 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
             <div class="text-gray-800 mb-4">All preparations are done. Please add a webhook on your repository:</div>
             <ul class="list-disc list-inside mb-4 text-gray-800">
                 <li>Go to your repo settings: Settings → Webhooks → Add webhook</li>
-                <li>Payload URL: <?= $fullUrl ?>deploy.php</li>
+                <li>Payload URL: <?= $dirs['full_webroot'] ?>deploy.php</li>
                 <li>Content type: application/json</li>
                 <li>Secret: <span class="font-mono"><?= $token ?></span></li>
                 <li>Events: Just the push event</li>
@@ -608,7 +737,7 @@ $right = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 inline" width="
             <div class="text-gray-800 mb-4">Deploy file generated. Please add a webhook on your repository:</div>
             <ul class="list-disc list-inside mb-4 text-gray-800">
                 <li>Go to your repo settings: Settings → Webhooks → Add webhook</li>
-                <li>Payload URL: <?= $fullUrl ?>deploy.php</li>
+                <li>Payload URL: <?= $dirs['full_webroot'] ?>deploy.php</li>
                 <li>Content type: application/json</li>
                 <li>Secret: <span class="font-mono"><?= $token ?></span></li>
                 <li>Events: Just the push event</li>
@@ -725,7 +854,7 @@ function deployfile($token)
 
     function deploy()
     {
-        if (str_ends_with(dirname(__FILE__), 'public')) {
+        if (is_file('../artisan')) {
             chdir('..');
         }
     
@@ -879,4 +1008,50 @@ function deployfile($token)
     $deployfile = str_replace('####VERSION####', VERSION, $deployfile);
     $deployfile = str_replace('####TOKEN####', $token ?? generateToken(), $deployfile);
     return $deployfile;
+}
+
+function htaccess_file($webpath = '/')
+{
+    if (!str_starts_with($webpath, '/'))
+        $webpath = '/' . $webpath;
+
+    $htaccessfile = <<<'EOD'
+    # Enable rewrite engine
+    RewriteEngine On
+    RewriteBase ####WEBPATH####
+
+    # -------------------------------------------------------
+    # Security: Deny access to sensitive folders
+    # -------------------------------------------------------
+    # Prevent access to internal project folders
+    RewriteRule ^(vendor|node_modules|\.git|\.env) - [F,L,NC]
+
+    # Prevent direct access to the /public folder itself
+    RewriteRule ^public(/.*)?$ - [F,L,NC]
+
+    # -------------------------------------------------------
+    # Allow install.php and deploy.php to be accessed directly
+    # -------------------------------------------------------
+    RewriteCond %{REQUEST_URI} ^.*/(install\.php|deploy\.php)$
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^(.*)$ $1 [L]
+
+    # -------------------------------------------------------
+    # Serve existing files from /public
+    # -------------------------------------------------------
+    # If the file or directory exists inside "public", serve it directly
+    RewriteCond %{REQUEST_URI} "^(####WEBPATHESC####)(.+)$"
+    RewriteCond "%{DOCUMENT_ROOT}%1/public/%2" -f [OR]
+    RewriteCond "%{DOCUMENT_ROOT}%1/public/%2" -d
+    RewriteRule ^(.*)$ public/$1 [L]
+
+    # -------------------------------------------------------
+    # Route all other requests to /public/index.php
+    # -------------------------------------------------------
+    RewriteRule ^.*$ public/index.php [L]
+    EOD;
+
+    $htaccessfile = str_replace('####WEBPATH####', $webpath, $htaccessfile);
+    $htaccessfile = str_replace('####WEBPATHESC####', str_replace('/', '\/', $webpath), $htaccessfile);
+    return $htaccessfile;
 }

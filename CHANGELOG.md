@@ -1,5 +1,21 @@
 # Changelog
 
+## [v2.0.0]
+
+### ✨ New
+
+- Support setups where rights are limited to current folder
+- Support setups where app need to run in subfolder
+- Add more checks
+
+### ♻️ Change
+
+- Improve deploy.php folder detection
+- Improve writing of .env settings
+
+---
+
+
 ## [v1.1.0]
 
 ### ✨ New

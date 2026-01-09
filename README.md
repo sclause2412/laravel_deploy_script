@@ -9,11 +9,23 @@ Currently this tool supports installation only for things I need, so maybe some 
 ## Usage
 
 - Download the latest version from the [Releases](https://github.com/sclause2412/laravel_deploy_script/releases) page.
-- Create a new website on your webserver using the public folder as root for your website (this is the default folder for Laravel).
-- Upload the [install.php](install.php) file to the public folder.
+- Create a new website on your webserver using the folder `public` as root for your website (this is the default folder for Laravel).
+- Upload the [install.php](install.php) file to the `public` folder.
 - Run the installation on any browser (e.g. https://example.com/install.php)
 
 The script will guide you through the installation.
+
+### Limited setup
+
+In case your webserver is limited, e.g.
+
+- webroot folder has different name (e.g. htdocs)
+- you are not allowed to put files outside the webroot folder
+- you cannot use subdomains but require to run Laravel app in a subfolder (e.g. https://example.com/laravelapp)
+
+you may still use this script and it will generate / modify some files to make the setup work as good as possible.
+
+Just place the install file in the webroot folder or any subfolder you want and call it in the browser.
 
 ### Requirements
 
