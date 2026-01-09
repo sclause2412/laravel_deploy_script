@@ -4,6 +4,15 @@
 
 ### 🐞 Bugfix
 
+- Fix issue if posix functions are not installed (in deploy file)
+- Fix issue with home path for Windows
+
+---
+
+## [v2.0.1]
+
+### 🐞 Bugfix
+
 - Fix issue if posix functions are not installed
 
 ---

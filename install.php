@@ -1,6 +1,6 @@
 <?php
 
-define('VERSION', '2.0.1');
+define('VERSION', '2.0.2');
 define('RUNDEPLOY', false);
 
 session_start();
@@ -67,7 +67,6 @@ function status_check()
 {
     $dirs = get_directories();
     $docroot = $dirs['docroot'];
-    $docroot_has_public_dir = $dirs['docroot_has_public_dir'];
     $current_dir = $dirs['current_dir'];
     $current_dir_check = is_writable($current_dir);
     $is_in_docroot = $current_dir == $docroot;
@@ -184,7 +183,7 @@ function status_check()
 $error = null;
 
 $step = $_GET['step'] ?? 'start';
-$home = $_SESSION['HOME'] ?? getenv('HOME') ?: getenv('HOMEDRIVE') . getenv('HOMEPATH');
+$home = $_SESSION['HOME'] ?? getenv('HOME') ?: getenv('HOMEDRIVE') . getenv('HOMEPATH') ?: getenv('USERPROFILE');
 if ($home == '') {
     if (function_exists('posix_getpwuid') && function_exists('posix_getuid'))
         $home = posix_getpwuid(posix_getuid())['dir'];
@@ -859,9 +858,12 @@ function deployfile($token)
             chdir('..');
         }
     
-        $home = getenv('HOME') ?: getenv('HOMEDRIVE') . getenv('HOMEPATH');
+        $home = getenv('HOME') ?: getenv('HOMEDRIVE') . getenv('HOMEPATH') ?: getenv('USERPROFILE');
         if ($home == '')
-            $home = posix_getpwuid(posix_getuid())['dir'];
+        {
+            if (function_exists('posix_getpwuid') && function_exists('posix_getuid'))
+                $home = posix_getpwuid(posix_getuid())['dir'];
+        }
 
         set_time_limit(600);
         $phpExe = get_php_executable();
