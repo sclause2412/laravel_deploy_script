@@ -1,6 +1,15 @@
 # Changelog
 
-## [v2.0.1]
+## [v2.0.3]
+
+### ♻️ Change
+
+- Using --no-dev and --optimize-autoloader for composer commands
+
+---
+
+
+## [v2.0.2]
 
 ### 🐞 Bugfix
 
