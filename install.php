@@ -1,6 +1,6 @@
 <?php
 
-define('VERSION', '2.0.2');
+define('VERSION', '2.0.3');
 define('RUNDEPLOY', false);
 
 session_start();
@@ -333,9 +333,9 @@ switch ($_POST['action'] ?? '') {
             $env = change_or_add('/APP_KEY=.*/', 'APP_KEY=' . $_SESSION['APP_KEY'], $env);
             file_put_contents('./.env', $env);
             if ($is_windows) {
-                exec_or_step('set HOME=' . $home . ' && composer install', 'env');
+                exec_or_step('set HOME=' . $home . ' && composer install --no-dev --optimize-autoloader', 'env');
             } else {
-                exec_or_step('HOME=' . $home . ' composer install', 'env');
+                exec_or_step('HOME=' . $home . ' composer install --no-dev --optimize-autoloader', 'env');
             }
             exec_or_step('npm install', 'env');
             if (!str_starts_with($_SESSION['APP_KEY'], 'base64')) {
@@ -873,9 +873,9 @@ function deployfile($token)
         $ret = array_merge($ret, run('git fetch'));
         $ret = array_merge($ret, run('git pull'));
         if (PHP_OS_FAMILY === 'Windows') {
-            $ret = array_merge($ret, run('set HOME=' . $home . ' && composer install'));
+            $ret = array_merge($ret, run('set HOME=' . $home . ' && composer install --no-dev --optimize-autoloader'));
         } else {
-            $ret = array_merge($ret, run('HOME=' . $home . ' composer install'));
+            $ret = array_merge($ret, run('HOME=' . $home . ' composer install --no-dev --optimize-autoloader'));
         }
         $ret = array_merge($ret, run('npm install'));
         $ret = array_merge($ret, run($phpExe . ' artisan migrate --force'));
